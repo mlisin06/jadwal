@@ -895,16 +895,22 @@ function removeStudent(cls, index) {
             }
         }
 
-        function initCalendar() {
+function initCalendar() {
             const calendarEl = document.getElementById('calendar');
             window.calendarObj = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
+                initialView: 'listMonth', // Mengubah tampilan awal ke daftar agenda bulan ini
                 locale: 'id',
                 headerToolbar: {
                     left: 'prev,next today',
                     center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,listWeek'
+                    right: 'listMonth,listWeek' // Tombol pilihan untuk tampilan daftar bulan atau minggu
                 },
+                buttonText: {
+                    today: 'Hari Ini',
+                    listMonth: 'Agenda Bulan Ini',
+                    listWeek: 'Agenda Minggu Ini'
+                },
+                noEventsContent: 'Tidak ada jadwal kegiatan untuk ditampilkan.',
                 events: getCalendarEvents()
             });
             window.calendarObj.render();
@@ -916,7 +922,7 @@ function removeStudent(cls, index) {
                 window.calendarObj.addEventSource(getCalendarEvents());
             }
         };
-
+        
         function getCalendarEvents() {
             return window.schedules.map(item => {
                 let color = "#4f46e5";
