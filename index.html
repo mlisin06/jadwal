@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Penjadwalan Pro - Templat Excel / CSV</title>
+    <title>Sistem Penjadwalan & Piket Sekolah Pro - Demo Blog</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Library SheetJS untuk membaca dan membuat file Excel / CSV -->
+    <!-- SheetJS (Excel Engine) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- FullCalendar.io (Kalender Visual Engine) -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
     <style>
         @media print {
             .no-print { display: none !important; }
@@ -15,15 +18,29 @@
             table { width: 100% !important; border-collapse: collapse !important; }
             th, td { border: 1px solid #cbd5e1 !important; padding: 8px !important; }
         }
+        .fc-toolbar-title { font-size: 1.1rem !important; font-weight: 700; color: #334155; }
+        .fc-button-primary { background-color: #4f46e5 !important; border-color: #4f46e5 !important; }
+        .fc-button-primary:hover { background-color: #4338ca !important; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen p-4 md:p-8">
 
     <div class="max-w-6xl mx-auto">
         <!-- Header -->
-        <header class="mb-6 text-center no-print">
-            <h1 class="text-3xl font-bold text-indigo-700">Manajer Jadwal & Piket Pro</h1>
-            <p class="text-slate-500 mt-1">Sistem Penjadwalan Sekolah Terintegrasi Templat Excel (.xlsx) & CSV.</p>
+        <header class="mb-6 text-center no-print flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="text-left">
+                <h1 class="text-2xl md:text-3xl font-bold text-indigo-700">Manajer Jadwal & Piket Pro</h1>
+                <p class="text-slate-500 text-xs md:text-sm">Mode Demo Blog: Integrasi Realtime Firebase & Kalender Visual Interaktif.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <!-- Status Koneksi Firebase -->
+                <span id="firebaseStatusBadge" class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span> Mode Lokal / Demo Aktif
+                </span>
+                <button onclick="openFirebaseModal()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-1">
+                    🔥 Pengaturan Firebase
+                </button>
+            </div>
         </header>
 
         <!-- Panel Kelola Master Data & Upload/Download Excel -->
@@ -162,30 +179,33 @@
             <div id="alertBox" class="hidden mt-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
         </div>
 
-        <!-- Section Tabel & Filter -->
+        <!-- Mode Tampilan: Tabel vs Kalender Visual -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 print-container">
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 no-print">
-                <div class="flex flex-col md:flex-row items-start md:items-center gap-3 w-full md:w-auto">
-                    <label class="text-sm font-medium text-slate-700 whitespace-nowrap">Filter Tampilan:</label>
-                    <select id="filterTitle" onchange="renderSchedules()" class="w-full md:w-64 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50">
-                        <option value="ALL">-- Tampilkan Semua Kegiatan --</option>
-                    </select>
+                <div class="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+                    <button id="btnViewTable" onclick="switchViewMode('table')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-colors bg-white text-indigo-700 shadow-sm">
+                        📋 Tampilan Tabel
+                    </button>
+                    <button id="btnViewCalendar" onclick="switchViewMode('calendar')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-colors text-slate-600 hover:text-slate-900">
+                        📅 Tampilan Kalender Visual
+                    </button>
                 </div>
+
                 <div class="flex items-center gap-3">
+                    <div id="tableFilterBox" class="flex items-center gap-2">
+                        <select id="filterTitle" onchange="renderSchedules()" class="px-3 py-2 border rounded-lg text-xs outline-none bg-slate-50">
+                            <option value="ALL">-- Semua Kegiatan --</option>
+                        </select>
+                    </div>
                     <span id="totalCount" class="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2.5 py-1 rounded-full">0 Jadwal</span>
-                    <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                    <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
                         Cetak Laporan
                     </button>
                 </div>
             </div>
 
-            <div class="hidden print:block text-center mb-6">
-                <h2 class="text-xl font-bold text-black uppercase tracking-wider">Laporan Jadwal & Rotasi Piket Sekolah</h2>
-                <hr class="border-black border-b mt-3">
-            </div>
-
-            <!-- Tabel Data Utama -->
-            <div class="overflow-x-auto">
+            <!-- Tampilan 1: Tabel Data Utama -->
+            <div id="tableViewContainer" class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="border-b text-xs font-semibold text-slate-400 uppercase tracking-wider print:text-black">
@@ -201,16 +221,50 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- Tampilan 2: Kalender Visual FullCalendar -->
+            <div id="calendarViewContainer" class="hidden">
+                <div id="calendar" class="min-h-[500px]"></div>
+            </div>
         </div>
     </div>
 
-    <!-- Modal Popup Edit Data -->
+    <!-- Modal Firebase Settings -->
+    <div id="firebaseModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4 no-print">
+        <div class="bg-white p-6 rounded-2xl shadow-xl border border-slate-200 max-w-xl w-full">
+            <h3 class="text-lg font-bold text-slate-800 mb-2">🔥 Pengaturan Konfigurasi Firebase</h3>
+            <p class="text-xs text-slate-500 mb-4">Tempelkan objek <code>firebaseConfig</code> dari Console Firebase Anda di bawah ini agar sinkronisasi multi-user langsung aktif.</p>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Kode FirebaseConfig (Format JSON / JavaScript):</label>
+                    <textarea id="firebaseConfigInput" rows="7" class="w-full p-3 font-mono text-xs border rounded-lg bg-slate-900 text-emerald-400 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder='{
+  "apiKey": "AIzaSy...",
+  "authDomain": "projek-anda.firebaseapp.com",
+  "projectId": "projek-anda",
+  "storageBucket": "projek-anda.appspot.com",
+  "messagingSenderId": "123456789",
+  "appId": "1:123456789:web:abcdef"
+}'></textarea>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center pt-4 border-t border-slate-100 mt-4">
+                <button type="button" onclick="clearFirebaseConfig()" class="px-3 py-1.5 text-xs text-red-600 hover:text-red-800 font-medium">Hapus Konfigurasi</button>
+                <div class="flex gap-2">
+                    <button type="button" onclick="closeFirebaseModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-xs rounded-lg">Batal</button>
+                    <button type="button" onclick="saveFirebaseConfig()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg">Simpan & Hubungkan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Edit Data -->
     <div id="editModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4 no-print">
         <div class="bg-white p-6 rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full">
             <h3 class="text-lg font-bold text-slate-800 mb-4">Edit Jadwal / Piket</h3>
             <form id="editForm" class="space-y-4">
                 <input type="hidden" id="editId">
-                
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Pilih Kelas</label>
                     <select id="editClassSelect" onchange="updateEditStudentDropdown()" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
@@ -222,7 +276,6 @@
                         <option value="Kelas 6">Kelas 6</option>
                     </select>
                 </div>
-
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 mb-1">Nama Siswa / Petugas</label>
@@ -233,12 +286,10 @@
                         <select id="editTitle" required class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"></select>
                     </div>
                 </div>
-
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Lokasi / Ruangan</label>
                     <select id="editRoomName" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"></select>
                 </div>
-
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Siklus Putaran Piket</label>
                     <select id="editCycleType" onchange="toggleEditFormFields()" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
@@ -250,7 +301,6 @@
                         <option value="Tahunan">Tahunan (1 Tahun)</option>
                     </select>
                 </div>
-
                 <div id="editDayField" class="hidden">
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Hari Pelaksanaan</label>
                     <select id="editDay" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
@@ -262,12 +312,10 @@
                         <option value="Sabtu">Sabtu</option>
                     </select>
                 </div>
-
                 <div id="editDateField" class="hidden">
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Tanggal Eksekusi</label>
                     <input type="date" id="editStartDate" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
-
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 mb-1">Jam Mulai (Opsional)</label>
@@ -278,39 +326,123 @@
                         <input type="time" id="editEndTime" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
                 </div>
-
                 <div id="editAlertBox" class="hidden p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs"></div>
-
                 <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-xs rounded-lg transition-colors">Batal</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg transition-colors">Simpan Perubahan</button>
+                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-xs rounded-lg">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg">Simpan Perubahan</button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- Firebase SDK Integration -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        window.db = null;
+        window.useFirebase = false;
+
+        const savedFirebaseConfig = localStorage.getItem('firebase_school_config');
+        if (savedFirebaseConfig) {
+            try {
+                const configObj = JSON.parse(savedFirebaseConfig);
+                const app = initializeApp(configObj);
+                window.db = getFirestore(app);
+                window.useFirebase = true;
+
+                const badge = document.getElementById('firebaseStatusBadge');
+                if (badge) {
+                    badge.className = "px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 flex items-center gap-1.5";
+                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Firebase Cloud Active`;
+                }
+
+                onSnapshot(collection(window.db, "schedules"), (snapshot) => {
+                    let remoteSchedules = [];
+                    snapshot.forEach((doc) => {
+                        remoteSchedules.push(doc.data());
+                    });
+                    window.schedules = remoteSchedules;
+                    localStorage.setItem('dynamic_schedules_pro_excel', JSON.stringify(remoteSchedules));
+                    window.updateFilterOptions();
+                    window.renderSchedules();
+                    if (window.calendarObj) window.renderCalendarEvents();
+                });
+            } catch (err) {
+                console.error("Firebase Config Error:", err);
+            }
+        }
+    </script>
+
+    <!-- App Logic Core -->
     <script>
+        // Data Master Default
         let masterStudents = JSON.parse(localStorage.getItem('master_students_data')) || {
             "Kelas 1": [{ name: "Ahmad Nur", phone: "08123456789" }, { name: "Budi Santoso", phone: "08987654321" }],
-            "Kelas 2": [{ name: "Siti Putri", phone: "" }],
-            "Kelas 3": [], "Kelas 4": [], "Kelas 5": [], "Kelas 6": []
+            "Kelas 2": [{ name: "Siti Putri", phone: "08567891234" }, { name: "Dewi Lestari", phone: "" }],
+            "Kelas 3": [{ name: "Rizky Pratama", phone: "0877889900" }], 
+            "Kelas 4": [{ name: "Nabila Syakieb", phone: "" }], 
+            "Kelas 5": [], "Kelas 6": []
         };
 
         let masterSubjects = JSON.parse(localStorage.getItem('master_subjects_data')) || [
-            "Piket Kebersihan Kelas", "Piket Perpustakaan", "Matematika", "Bahasa Indonesia"
+            "Piket Kebersihan Kelas", "Piket Perpustakaan", "Matematika", "Bahasa Indonesia", "PJOK"
         ];
 
         let masterRooms = JSON.parse(localStorage.getItem('master_rooms_data')) || [
             "Laboratorium Komputer", "Perpustakaan", "Lapangan Utama", "Ruang Aula"
         ];
 
-        let schedules = JSON.parse(localStorage.getItem('dynamic_schedules_pro_excel')) || [];
+        // MODE DEMO: Jika jadwal kosong, otomatis isi data sampel agar blog langsung hidup
+        let defaultDemoSchedules = [
+            { id: 101, className: "Kelas 1", childName: "Ahmad Nur", title: "Piket Kebersihan Kelas", roomName: "NONE", cycleType: "Harian", day: "", startDate: "", startTime: "06:30", endTime: "07:00" },
+            { id: 102, className: "Kelas 1", childName: "Budi Santoso", title: "Matematika", roomName: "NONE", cycleType: "Mingguan", day: "Senin", startDate: "", startTime: "07:30", endTime: "09:00" },
+            { id: 103, className: "Kelas 2", childName: "Siti Putri", title: "Piket Perpustakaan", roomName: "Perpustakaan", cycleType: "Mingguan", day: "Selasa", startDate: "", startTime: "09:00", endTime: "10:00" },
+            { id: 104, className: "Kelas 3", childName: "Rizky Pratama", title: "PJOK", roomName: "Lapangan Utama", cycleType: "Mingguan", day: "Jumat", startDate: "", startTime: "07:00", endTime: "08:30" }
+        ];
+
+        window.schedules = JSON.parse(localStorage.getItem('dynamic_schedules_pro_excel')) || defaultDemoSchedules;
+        window.calendarObj = null;
 
         const form = document.getElementById('scheduleForm');
         const alertBox = document.getElementById('alertBox');
         const tableBody = document.getElementById('scheduleTableBody');
         const totalCount = document.getElementById('totalCount');
         const filterTitle = document.getElementById('filterTitle');
+
+        function openFirebaseModal() {
+            const currentConfig = localStorage.getItem('firebase_school_config') || '';
+            document.getElementById('firebaseConfigInput').value = currentConfig;
+            document.getElementById('firebaseModal').classList.remove('hidden');
+        }
+
+        function closeFirebaseModal() {
+            document.getElementById('firebaseModal').classList.add('hidden');
+        }
+
+        function saveFirebaseConfig() {
+            const raw = document.getElementById('firebaseConfigInput').value.trim();
+            if (!raw) return;
+            try {
+                let cleanJson = raw;
+                if (cleanJson.includes('=')) {
+                    cleanJson = cleanJson.split('=')[1].replace(';', '').trim();
+                }
+                const parsed = eval('(' + cleanJson + ')');
+                localStorage.setItem('firebase_school_config', JSON.stringify(parsed));
+                alert("Konfigurasi Firebase berhasil disimpan! Halaman dimuat ulang.");
+                window.location.reload();
+            } catch (e) {
+                alert("Format kode Firebase tidak valid.");
+            }
+        }
+
+        function clearFirebaseConfig() {
+            if (confirm("Hapus sambungan Firebase dan kembali ke mode lokal?")) {
+                localStorage.removeItem('firebase_school_config');
+                window.location.reload();
+            }
+        }
 
         function saveMasterData() {
             localStorage.setItem('master_students_data', JSON.stringify(masterStudents));
@@ -322,12 +454,9 @@
             renderMasterList();
         }
 
-        /* --- FITUR EXPORT EXCEL (.XLSX) --- */
         function downloadExcelTemplate() {
             const wb = XLSX.utils.book_new();
-
-            // Sheet 1: Jadwal Piket & Pelajaran
-            const scheduleData = schedules.map((item, idx) => ({
+            const scheduleData = window.schedules.map((item, idx) => ({
                 "No": idx + 1,
                 "Kelas": item.className,
                 "Nama Siswa": item.childName,
@@ -338,41 +467,24 @@
                 "Jam Mulai": item.startTime || '',
                 "Jam Selesai": item.endTime || ''
             }));
-            const wsSchedules = XLSX.utils.json_to_sheet(scheduleData.length ? scheduleData : [
-                { "No": 1, "Kelas": "Kelas 1", "Nama Siswa": "Ahmad Nur", "Mapel / Kegiatan": "Piket Kebersihan Kelas", "Ruangan": "", "Siklus": "Harian", "Hari / Tanggal": "Setiap Hari", "Jam Mulai": "06:30", "Jam Selesai": "07:00" }
-            ]);
+            const wsSchedules = XLSX.utils.json_to_sheet(scheduleData);
             XLSX.utils.book_append_sheet(wb, wsSchedules, "Daftar Jadwal");
-
-            // Sheet 2: Master Siswa
-            const studentRows = [];
-            Object.keys(masterStudents).forEach(cls => {
-                (masterStudents[cls] || []).forEach(st => {
-                    studentRows.push({ "Kelas": cls, "Nama Siswa": st.name, "No WhatsApp": st.phone });
-                });
-            });
-            const wsStudents = XLSX.utils.json_to_sheet(studentRows);
-            XLSX.utils.book_append_sheet(wb, wsStudents, "Master Siswa");
-
             XLSX.writeFile(wb, "Template_Jadwal_Piket_Sekolah.xlsx");
         }
 
-        /* --- FITUR IMPORT EXCEL / CSV (.XLSX / .CSV) --- */
         function handleExcelUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
-
-                    // Baca Sheet "Daftar Jadwal" atau Sheet Pertama
-                    const sheetName = workbook.SheetNames.includes("Daftar Jadwal") ? "Daftar Jadwal" : workbook.SheetNames[0];
+                    const sheetName = workbook.SheetNames[0];
                     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
                     if (rows.length > 0) {
-                        schedules = rows.map((row, idx) => ({
+                        window.schedules = rows.map((row, idx) => ({
                             id: Date.now() + idx,
                             className: row["Kelas"] || "Kelas 1",
                             childName: row["Nama Siswa"] || "Siswa",
@@ -384,31 +496,21 @@
                             startTime: row["Jam Mulai"] || "",
                             endTime: row["Jam Selesai"] || ""
                         }));
+                        syncScheduleData();
                     }
-
-                    // Baca Sheet "Master Siswa" jika ada
-                    if (workbook.SheetNames.includes("Master Siswa")) {
-                        const studentRows = XLSX.utils.sheet_to_json(workbook.Sheets["Master Siswa"]);
-                        studentRows.forEach(r => {
-                            if (r["Kelas"] && r["Nama Siswa"]) {
-                                if (!masterStudents[r["Kelas"]]) masterStudents[r["Kelas"]] = [];
-                                const exists = masterStudents[r["Kelas"]].some(s => s.name === r["Nama Siswa"]);
-                                if (!exists) {
-                                    masterStudents[r["Kelas"]].push({ name: r["Nama Siswa"], phone: r["No WhatsApp"] || "" });
-                                }
-                            }
-                        });
-                    }
-
-                    saveMasterData();
-                    updateFilterOptions();
-                    renderSchedules();
-                    alert("Berhasil mengimpor data dari file Excel!");
+                    alert("Berhasil mengimpor data Excel!");
                 } catch (error) {
-                    alert("Gagal membaca file Excel/CSV. Pastikan format file sesuai.");
+                    alert("Gagal membaca file.");
                 }
             };
             reader.readAsArrayBuffer(file);
+        }
+
+        function syncScheduleData() {
+            localStorage.setItem('dynamic_schedules_pro_excel', JSON.stringify(window.schedules));
+            window.updateFilterOptions();
+            window.renderSchedules();
+            if (window.calendarObj) window.renderCalendarEvents();
         }
 
         function addStudentToClass() {
@@ -459,16 +561,12 @@
             const selectEl = document.getElementById('childName');
             selectEl.innerHTML = '';
             const students = masterStudents[cls] || [];
-            if (students.length === 0) {
-                selectEl.innerHTML = `<option value="">-- Belum ada siswa di ${cls} --</option>`;
-            } else {
-                students.forEach(s => {
-                    const opt = document.createElement('option');
-                    opt.value = s.name;
-                    opt.textContent = s.name;
-                    selectEl.appendChild(opt);
-                });
-            }
+            students.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.name;
+                opt.textContent = s.name;
+                selectEl.appendChild(opt);
+            });
         }
 
         function updateSubjectDropdown() {
@@ -525,9 +623,8 @@
                 return "Jam selesai harus lebih besar dari jam mulai.";
             }
 
-            for (let item of schedules) {
+            for (let item of window.schedules) {
                 if (item.id === excludeId) continue;
-
                 const sameDay = (newEntry.cycleType === 'Mingguan' && item.cycleType === 'Mingguan' && newEntry.day === item.day);
                 const sameDate = (newEntry.startDate && item.startDate && newEntry.startDate === item.startDate);
                 const isDaily = (newEntry.cycleType === 'Harian' || item.cycleType === 'Harian');
@@ -555,7 +652,7 @@
         }
 
         function sendWhatsAppReminder(id) {
-            const item = schedules.find(s => s.id === id);
+            const item = window.schedules.find(s => s.id === id);
             if (!item) return;
 
             let phone = "";
@@ -564,7 +661,7 @@
             if (foundStudent) phone = foundStudent.phone;
 
             if (!phone) {
-                phone = prompt(`Masukkan Nomor WhatsApp untuk ${item.childName} (Contoh: 08123456789):`);
+                phone = prompt(`Masukkan Nomor WhatsApp untuk ${item.childName}:`, "08");
                 if (!phone) return;
             }
 
@@ -587,11 +684,11 @@
             window.open(waUrl, '_blank');
         }
 
-        function updateFilterOptions() {
+        window.updateFilterOptions = function() {
             const currentSelected = filterTitle.value;
-            const uniqueTitles = [...new Set(schedules.map(item => item.title))];
+            const uniqueTitles = [...new Set(window.schedules.map(item => item.title))];
 
-            filterTitle.innerHTML = `<option value="ALL">-- Tampilkan Semua Kegiatan --</option>`;
+            filterTitle.innerHTML = `<option value="ALL">-- Semua Kegiatan --</option>`;
             uniqueTitles.forEach(title => {
                 const opt = document.createElement('option');
                 opt.value = title;
@@ -600,15 +697,15 @@
             });
 
             filterTitle.value = uniqueTitles.includes(currentSelected) ? currentSelected : "ALL";
-        }
+        };
 
-        function renderSchedules() {
+        window.renderSchedules = function() {
             tableBody.innerHTML = '';
             const selectedFilter = filterTitle.value;
 
-            let filteredSchedules = schedules;
+            let filteredSchedules = window.schedules;
             if (selectedFilter !== "ALL") {
-                filteredSchedules = schedules.filter(item => item.title === selectedFilter);
+                filteredSchedules = window.schedules.filter(item => item.title === selectedFilter);
             }
 
             if (filteredSchedules.length === 0) {
@@ -617,7 +714,7 @@
 
             filteredSchedules.forEach(item => {
                 let detailInfo = item.cycleType === 'Harian' ? 'Setiap Hari' : (item.cycleType === 'Mingguan' ? `Hari ${item.day}` : `Tgl: ${item.startDate || '-'}`);
-                let timeDisplay = (item.startTime && item.endTime) ? `${item.startTime} - ${item.endTime} WIB` : '<span class="italic text-slate-400">Sepanjang Hari (Bebas)</span>';
+                let timeDisplay = (item.startTime && item.endTime) ? `${item.startTime} - ${item.endTime} WIB` : '<span class="italic text-slate-400">Sepanjang Hari</span>';
                 let roomDisplay = item.roomName !== 'NONE' ? `<span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-xs font-semibold">${item.roomName}</span>` : `<span class="text-slate-400 text-xs italic">- Tanpa Ruangan -</span>`;
 
                 const row = document.createElement('tr');
@@ -645,10 +742,9 @@
             });
 
             totalCount.innerText = `${filteredSchedules.length} Jadwal`;
-            localStorage.setItem('dynamic_schedules_pro_excel', JSON.stringify(schedules));
-        }
+        };
 
-        form.addEventListener('submit', (e) => {
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const className = document.getElementById('formClassSelect').value;
             const childName = document.getElementById('childName').value;
@@ -685,9 +781,15 @@
             }
 
             alertBox.classList.add('hidden');
-            schedules.push(newEntry);
-            updateFilterOptions();
-            renderSchedules();
+
+            if (window.useFirebase && window.db) {
+                const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+                await setDoc(doc(window.db, "schedules", String(newEntry.id)), newEntry);
+            } else {
+                window.schedules.push(newEntry);
+                syncScheduleData();
+            }
+
             form.reset();
             updateStudentDropdown();
             updateSubjectDropdown();
@@ -695,23 +797,84 @@
             toggleFormFields();
         });
 
-        /* --- MODAL EDIT LOGIC --- */
+        // View Mode Switcher
+        function switchViewMode(mode) {
+            const tblContainer = document.getElementById('tableViewContainer');
+            const calContainer = document.getElementById('calendarViewContainer');
+            const btnTbl = document.getElementById('btnViewTable');
+            const btnCal = document.getElementById('btnViewCalendar');
+
+            if (mode === 'calendar') {
+                tblContainer.classList.add('hidden');
+                calContainer.classList.remove('hidden');
+                btnCal.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition-colors bg-white text-indigo-700 shadow-sm";
+                btnTbl.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition-colors text-slate-600 hover:text-slate-900";
+                
+                if (!window.calendarObj) {
+                    initCalendar();
+                } else {
+                    window.renderCalendarEvents();
+                }
+            } else {
+                tblContainer.classList.remove('hidden');
+                calContainer.classList.add('hidden');
+                btnTbl.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition-colors bg-white text-indigo-700 shadow-sm";
+                btnCal.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition-colors text-slate-600 hover:text-slate-900";
+            }
+        }
+
+        function initCalendar() {
+            const calendarEl = document.getElementById('calendar');
+            window.calendarObj = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'id',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,listWeek'
+                },
+                events: getCalendarEvents()
+            });
+            window.calendarObj.render();
+        }
+
+        window.renderCalendarEvents = function() {
+            if (window.calendarObj) {
+                window.calendarObj.removeAllEvents();
+                window.calendarObj.addEventSource(getCalendarEvents());
+            }
+        };
+
+        function getCalendarEvents() {
+            return window.schedules.map(item => {
+                let color = "#4f46e5";
+                if (item.title.toLowerCase().includes('piket')) color = "#059669";
+                else if (item.cycleType === 'Tahunan') color = "#e11d48";
+
+                let dateStr = item.startDate || new Date().toISOString().split('T')[0];
+                return {
+                    title: `${item.title} - ${item.childName} (${item.className})`,
+                    start: item.startTime ? `${dateStr}T${item.startTime}` : dateStr,
+                    end: item.endTime ? `${dateStr}T${item.endTime}` : null,
+                    backgroundColor: color,
+                    borderColor: color
+                };
+            });
+        }
+
+        // Edit & Delete Handlers
         function openEditModal(id) {
-            const item = schedules.find(s => s.id === id);
+            const item = window.schedules.find(s => s.id === id);
             if (!item) return;
 
             document.getElementById('editId').value = item.id;
             document.getElementById('editClassSelect').value = item.className;
-            
             updateEditStudentDropdown();
             document.getElementById('editChildName').value = item.childName;
-
             updateEditSubjectDropdown();
             document.getElementById('editTitle').value = item.title;
-
             updateEditRoomDropdown();
             document.getElementById('editRoomName').value = item.roomName;
-
             document.getElementById('editCycleType').value = item.cycleType;
             toggleEditFormFields();
 
@@ -723,8 +886,6 @@
 
             document.getElementById('editStartTime').value = item.startTime || '';
             document.getElementById('editEndTime').value = item.endTime || '';
-            document.getElementById('editAlertBox').classList.add('hidden');
-
             document.getElementById('editModal').classList.remove('hidden');
         }
 
@@ -783,7 +944,7 @@
             }
         }
 
-        document.getElementById('editForm').addEventListener('submit', (e) => {
+        document.getElementById('editForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = Number(document.getElementById('editId').value);
             const className = document.getElementById('editClassSelect').value;
@@ -791,46 +952,34 @@
             const title = document.getElementById('editTitle').value;
             const roomName = document.getElementById('editRoomName').value;
             const cycleType = document.getElementById('editCycleType').value;
-            const startTime = document.getElementById('editStartTime').value;
-            const endTime = document.getElementById('editEndTime').value;
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
 
-            let updatedEntry = {
-                id,
-                className,
-                childName,
-                title,
-                roomName,
-                cycleType,
-                startTime,
-                endTime
-            };
-
+            let updatedEntry = { id, className, childName, title, roomName, cycleType, startTime, endTime };
             if (cycleType === 'Mingguan') updatedEntry.day = document.getElementById('editDay').value;
             else if (cycleType !== 'Harian') updatedEntry.startDate = document.getElementById('editStartDate').value;
 
-            const conflictError = checkConflict(updatedEntry, id);
-            if (conflictError) {
-                const alertEl = document.getElementById('editAlertBox');
-                alertEl.innerText = `Peringatan Bentrok: ${conflictError}`;
-                alertEl.classList.remove('hidden');
-                return;
+            if (window.useFirebase && window.db) {
+                const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+                await setDoc(doc(window.db, "schedules", String(id)), updatedEntry);
+            } else {
+                const index = window.schedules.findIndex(s => s.id === id);
+                if (index !== -1) window.schedules[index] = updatedEntry;
+                syncScheduleData();
             }
-
-            const index = schedules.findIndex(s => s.id === id);
-            if (index !== -1) {
-                schedules[index] = updatedEntry;
-            }
-
             closeEditModal();
-            updateFilterOptions();
-            renderSchedules();
         });
 
-        function deleteSchedule(id) {
-            schedules = schedules.filter(item => item.id !== id);
-            updateFilterOptions();
-            renderSchedules();
-            alertBox.classList.add('hidden');
+        async function deleteSchedule(id) {
+            if (confirm("Yakin ingin menghapus jadwal ini?")) {
+                if (window.useFirebase && window.db) {
+                    const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+                    await deleteDoc(doc(window.db, "schedules", String(id)));
+                } else {
+                    window.schedules = window.schedules.filter(item => item.id !== id);
+                    syncScheduleData();
+                }
+            }
         }
 
         // Inisialisasi awal
