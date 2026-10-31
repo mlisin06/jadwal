@@ -468,6 +468,8 @@
 
         function downloadExcelTemplate() {
             const wb = XLSX.utils.book_new();
+            
+            // Sheet 1: Daftar Jadwal
             const scheduleData = window.schedules.map((item, idx) => ({
                 "No": idx + 1,
                 "Kelas": item.className,
@@ -481,6 +483,17 @@
             }));
             const wsSchedules = XLSX.utils.json_to_sheet(scheduleData);
             XLSX.utils.book_append_sheet(wb, wsSchedules, "Daftar Jadwal");
+
+            // Sheet 2: Master Siswa (Agar data siswa ikut tersimpan di templat)
+            const studentRows = [];
+            Object.keys(masterStudents).forEach(cls => {
+                (masterStudents[cls] || []).forEach(st => {
+                    studentRows.push({ "Kelas": cls, "Nama Siswa": st.name, "No WhatsApp": st.phone });
+                });
+            });
+            const wsStudents = XLSX.utils.json_to_sheet(studentRows.length ? studentRows : [{"Kelas": "Kelas 1", "Nama Siswa": "Ahmad Nur", "No WhatsApp": "08123456789"}]);
+            XLSX.utils.book_append_sheet(wb, wsStudents, "Master Siswa");
+
             XLSX.writeFile(wb, "Template_Jadwal_Piket_Sekolah.xlsx");
         }
 
@@ -492,27 +505,51 @@
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+                    // 1. Baca Data Sheet Master Siswa (Jika ada)
+                    const studentSheetName = workbook.SheetNames.find(name => name.toLowerCase().includes('siswa') || name.toLowerCase().includes('master'));
+                    if (studentSheetName) {
+                        const studentRows = XLSX.utils.sheet_to_json(workbook.Sheets[studentSheetName]);
+                        studentRows.forEach(r => {
+                            const cls = r["Kelas"] || r["kelas"];
+                            const name = r["Nama Siswa"] || r["Nama"] || r["nama"];
+                            const phone = r["No WhatsApp"] || r["No WA"] || r["Telepon"] || "";
+                            if (cls && name) {
+                                if (!masterStudents[cls]) masterStudents[cls] = [];
+                                // Cek agar tidak duplikat
+                                const exists = masterStudents[cls].some(s => s.name.toLowerCase() === String(name).toLowerCase());
+                                if (!exists) {
+                                    masterStudents[cls].push({ name: String(name), phone: String(phone) });
+                                }
+                            }
+                        });
+                    }
+
+                    // 2. Baca Data Sheet Jadwal
+                    const scheduleSheetName = workbook.SheetNames.includes("Daftar Jadwal") ? "Daftar Jadwal" : workbook.SheetNames[0];
+                    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[scheduleSheetName]);
 
                     if (rows.length > 0) {
                         window.schedules = rows.map((row, idx) => ({
                             id: Date.now() + idx,
-                            className: row["Kelas"] || "Kelas 1",
-                            childName: row["Nama Siswa"] || "Siswa",
-                            title: row["Mapel / Kegiatan"] || "Kegiatan",
+                            className: row["Kelas"] || row["kelas"] || "Kelas 1",
+                            childName: row["Nama Siswa"] || row["Nama"] || "Siswa",
+                            title: row["Mapel / Kegiatan"] || row["Mapel"] || "Kegiatan",
                             roomName: row["Ruangan"] || "NONE",
                             cycleType: row["Siklus"] || "Harian",
-                            day: row["Hari / Tanggal"] && ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"].includes(row["Hari / Tanggal"]) ? row["Hari / Tanggal"] : "",
-                            startDate: row["Hari / Tanggal"] && !["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"].includes(row["Hari / Tanggal"]) ? row["Hari / Tanggal"] : "",
+                            day: (row["Hari / Tanggal"] || row["Hari"] || "") && ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"].includes(row["Hari / Tanggal"] || row["Hari"]) ? (row["Hari / Tanggal"] || row["Hari"]) : "",
+                            startDate: (row["Hari / Tanggal"] || row["Tanggal"] || "") && !["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"].includes(row["Hari / Tanggal"] || row["Tanggal"]) ? (row["Hari / Tanggal"] || row["Tanggal"]) : "",
                             startTime: row["Jam Mulai"] || "",
                             endTime: row["Jam Selesai"] || ""
                         }));
                         syncScheduleData();
                     }
-                    alert("Berhasil mengimpor data Excel!");
+
+                    saveMasterData();
+                    alert("Berhasil mengimpor data Excel dan Master Siswa!");
                 } catch (error) {
-                    alert("Gagal membaca file.");
+                    console.error(error);
+                    alert("Gagal membaca file Excel. Pastikan format kolom sesuai.");
                 }
             };
             reader.readAsArrayBuffer(file);
@@ -573,12 +610,16 @@
             const selectEl = document.getElementById('childName');
             selectEl.innerHTML = '';
             const students = masterStudents[cls] || [];
-            students.forEach(s => {
-                const opt = document.createElement('option');
-                opt.value = s.name;
-                opt.textContent = s.name;
-                selectEl.appendChild(opt);
-            });
+            if (students.length === 0) {
+                selectEl.innerHTML = `<option value="">-- Belum ada siswa di ${cls} --</option>`;
+            } else {
+                students.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.name;
+                    opt.textContent = s.name;
+                    selectEl.appendChild(opt);
+                });
+            }
         }
 
         function updateSubjectDropdown() {
