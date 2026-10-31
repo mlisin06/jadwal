@@ -593,17 +593,36 @@
             }
         }
 
-        function renderMasterList() {
-            const cls = document.getElementById('masterClassSelect').value;
-            const listEl = document.getElementById('masterStudentList');
-            document.getElementById('masterListTitle').innerText = `Daftar Siswa & WA (${cls}):`;
-            listEl.innerHTML = '';
-            (masterStudents[cls] || []).forEach(item => {
-                const li = document.createElement('li');
-                li.textContent = `${item.name} (${item.phone || 'Tanpa WA'})`;
-                listEl.appendChild(li);
-            });
-        }
+       function renderMasterList() {
+    const cls = document.getElementById('masterClassSelect').value;
+    const listEl = document.getElementById('masterStudentList');
+    document.getElementById('masterListTitle').innerText = `Daftar Siswa & WA (${cls}):`;
+    listEl.innerHTML = '';
+    
+    const students = masterStudents[cls] || [];
+    if (students.length === 0) {
+        listEl.innerHTML = `<li class="text-slate-400 italic">Belum ada siswa di ${cls}</li>`;
+        return;
+    }
+
+    students.forEach((item, index) => {
+        const li = document.createElement('li');
+        li.className = "flex justify-between items-center py-1 border-b border-slate-100";
+        li.innerHTML = `
+            <span>${item.name} (${item.phone || 'Tanpa WA'})</span>
+            <button onclick="removeStudent('${cls}', ${index})" class="text-red-500 hover:text-red-700 font-bold px-2 py-0.5 bg-red-50 rounded text-[10px]">Hapus</button>
+        `;
+        listEl.appendChild(li);
+    });
+}
+
+// Fungsi eksekusi hapus siswa
+function removeStudent(cls, index) {
+    if (confirm(`Yakin ingin menghapus siswa ini dari ${cls}?`)) {
+        masterStudents[cls].splice(index, 1);
+        saveMasterData();
+    }
+}
 
         function updateStudentDropdown() {
             const cls = document.getElementById('formClassSelect').value;
