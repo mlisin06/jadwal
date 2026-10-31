@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Penjadwalan Pro - Templat Excel / CSV</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Library SheetJS untuk membaca dan membuat file Excel / CSV -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; padding: 0 !important; }
+            .print-container { box-shadow: none !important; border: none !important; padding: 0 !important; width: 100% !important; }
+            table { width: 100% !important; border-collapse: collapse !important; }
+            th, td { border: 1px solid #cbd5e1 !important; padding: 8px !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <header class="mb-6 text-center no-print">
+            <h1 class="text-3xl font-bold text-indigo-700">Manajer Jadwal & Piket Pro</h1>
+            <p class="text-slate-500 mt-1">Sistem Penjadwalan Sekolah Terintegrasi Templat Excel (.xlsx) & CSV.</p>
+        </header>
+
+        <!-- Panel Kelola Master Data & Upload/Download Excel -->
+        <details class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6 no-print">
+            <summary class="font-semibold text-indigo-700 cursor-pointer flex justify-between items-center">
+                <span>⚙️ Kelola Master Data & Import/Export Templat Excel (.xlsx)</span>
+                <span class="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded">Klik untuk buka/tutup</span>
+            </summary>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4 pt-4 border-t border-slate-100">
+                <!-- Data Siswa & Kontak WA -->
+                <div>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">1. Tambah Siswa & No. WA</h3>
+                    <div class="space-y-2">
+                        <select id="masterClassSelect" onchange="renderMasterList()" class="w-full px-3 py-2 border rounded-lg text-sm bg-slate-50">
+                            <option value="Kelas 1">Kelas 1</option>
+                            <option value="Kelas 2">Kelas 2</option>
+                            <option value="Kelas 3">Kelas 3</option>
+                            <option value="Kelas 4">Kelas 4</option>
+                            <option value="Kelas 5">Kelas 5</option>
+                            <option value="Kelas 6">Kelas 6</option>
+                        </select>
+                        <input type="text" id="newStudentName" placeholder="Nama Siswa / Petugas" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        <input type="text" id="newStudentPhone" placeholder="No. WA (Contoh: 08123456789)" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        <button onclick="addStudentToClass()" class="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium py-2 rounded-lg">Simpan ke Kelas</button>
+                    </div>
+                </div>
+
+                <!-- Master Mapel & Ruangan -->
+                <div>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">2. Tambah Mapel & Ruangan</h3>
+                    <div class="space-y-2">
+                        <input type="text" id="newSubjectName" placeholder="Nama Mapel / Kegiatan" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        <button onclick="addSubject()" class="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium py-2 rounded-lg mb-2">Simpan Mapel</button>
+                        
+                        <input type="text" id="newRoomName" placeholder="Nama Ruangan (Lab, Perpus, dll)" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        <button onclick="addRoom()" class="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium py-2 rounded-lg">Simpan Ruangan</button>
+                    </div>
+                </div>
+
+                <!-- Backup Data Excel (.xlsx) -->
+                <div>
+                    <h3 class="text-sm font-bold text-slate-700 mb-2">3. Templat & Import/Export Excel</h3>
+                    <div class="space-y-2">
+                        <button onclick="downloadExcelTemplate()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium py-2 rounded-lg flex items-center justify-center gap-1">
+                            📊 Download Templat Excel (.xlsx)
+                        </button>
+                        <label class="block text-xs font-medium text-slate-500 mt-2">Upload Data Excel / CSV:</label>
+                        <input type="file" id="uploadFile" accept=".xlsx, .xls, .csv" onchange="handleExcelUpload(event)" class="w-full text-xs text-slate-500 cursor-pointer file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-4 border-t border-slate-100 bg-slate-50 p-3 rounded-lg text-xs">
+                <h4 class="font-bold text-slate-700 mb-1" id="masterListTitle">Daftar Siswa & WA</h4>
+                <ul id="masterStudentList" class="list-disc pl-4 text-slate-600 max-h-32 overflow-y-auto space-y-1"></ul>
+            </div>
+        </details>
+
+        <!-- Form Tambah Jadwal Utama -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8 no-print">
+            <h2 class="text-lg font-semibold text-slate-700 mb-4">Buat Jadwal Baru</h2>
+            <form id="scheduleForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Pilih Kelas</label>
+                    <select id="formClassSelect" onchange="updateStudentDropdown()" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <option value="Kelas 1">Kelas 1</option>
+                        <option value="Kelas 2">Kelas 2</option>
+                        <option value="Kelas 3">Kelas 3</option>
+                        <option value="Kelas 4">Kelas 4</option>
+                        <option value="Kelas 5">Kelas 5</option>
+                        <option value="Kelas 6">Kelas 6</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Pilih Siswa / Petugas</label>
+                    <select id="childName" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-indigo-50/50"></select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Pilih Mapel / Kegiatan</label>
+                    <select id="title" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-indigo-50/50"></select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Lokasi / Ruangan (Opsional)</label>
+                    <select id="roomName" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"></select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Siklus Putaran Piket</label>
+                    <select id="cycleType" onchange="toggleFormFields()" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <option value="Harian">Harian (Setiap Hari)</option>
+                        <option value="Mingguan">Mingguan (Hari Tertentu)</option>
+                        <option value="Bulanan">Bulanan (Tanggal Tertentu)</option>
+                        <option value="3 Bulanan">3 Bulanan (Triwulan)</option>
+                        <option value="6 Bulanan">6 Bulanan (Semester)</option>
+                        <option value="Tahunan">Tahunan (1 Tahun)</option>
+                    </select>
+                </div>
+
+                <div id="dayField" class="hidden">
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Hari Pelaksanaan</label>
+                    <select id="day" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <option value="Senin">Senin</option>
+                        <option value="Selasa">Selasa</option>
+                        <option value="Rabu">Rabu</option>
+                        <option value="Kamis">Kamis</option>
+                        <option value="Jumat">Jumat</option>
+                        <option value="Sabtu">Sabtu</option>
+                    </select>
+                </div>
+
+                <div id="dateField" class="hidden">
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Tanggal Eksekusi</label>
+                    <input type="date" id="startDate" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Jam Mulai (Opsional)</label>
+                    <input type="time" id="startTime" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Jam Selesai (Opsional)</label>
+                    <input type="time" id="endTime" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+
+                <div class="md:col-span-2 lg:col-span-3 flex justify-end">
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-2 rounded-lg transition-colors">
+                        Simpan & Cek Bentrok
+                    </button>
+                </div>
+            </form>
+            <div id="alertBox" class="hidden mt-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"></div>
+        </div>
+
+        <!-- Section Tabel & Filter -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 print-container">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 no-print">
+                <div class="flex flex-col md:flex-row items-start md:items-center gap-3 w-full md:w-auto">
+                    <label class="text-sm font-medium text-slate-700 whitespace-nowrap">Filter Tampilan:</label>
+                    <select id="filterTitle" onchange="renderSchedules()" class="w-full md:w-64 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50">
+                        <option value="ALL">-- Tampilkan Semua Kegiatan --</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="totalCount" class="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2.5 py-1 rounded-full">0 Jadwal</span>
+                    <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                        Cetak Laporan
+                    </button>
+                </div>
+            </div>
+
+            <div class="hidden print:block text-center mb-6">
+                <h2 class="text-xl font-bold text-black uppercase tracking-wider">Laporan Jadwal & Rotasi Piket Sekolah</h2>
+                <hr class="border-black border-b mt-3">
+            </div>
+
+            <!-- Tabel Data Utama -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b text-xs font-semibold text-slate-400 uppercase tracking-wider print:text-black">
+                            <th class="py-3 px-4">Kelas & Petugas</th>
+                            <th class="py-3 px-4">Mapel / Kegiatan</th>
+                            <th class="py-3 px-4">Lokasi / Ruangan</th>
+                            <th class="py-3 px-4">Siklus & Waktu</th>
+                            <th class="py-3 px-4 text-center no-print">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scheduleTableBody" class="divide-y divide-slate-100 text-sm">
+                        <!-- Data terisi otomatis -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Popup Edit Data -->
+    <div id="editModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4 no-print">
+        <div class="bg-white p-6 rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full">
+            <h3 class="text-lg font-bold text-slate-800 mb-4">Edit Jadwal / Piket</h3>
+            <form id="editForm" class="space-y-4">
+                <input type="hidden" id="editId">
+                
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Pilih Kelas</label>
+                    <select id="editClassSelect" onchange="updateEditStudentDropdown()" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="Kelas 1">Kelas 1</option>
+                        <option value="Kelas 2">Kelas 2</option>
+                        <option value="Kelas 3">Kelas 3</option>
+                        <option value="Kelas 4">Kelas 4</option>
+                        <option value="Kelas 5">Kelas 5</option>
+                        <option value="Kelas 6">Kelas 6</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Nama Siswa / Petugas</label>
+                        <select id="editChildName" required class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Mapel / Kegiatan</label>
+                        <select id="editTitle" required class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Lokasi / Ruangan</label>
+                    <select id="editRoomName" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Siklus Putaran Piket</label>
+                    <select id="editCycleType" onchange="toggleEditFormFields()" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="Harian">Harian (Setiap Hari)</option>
+                        <option value="Mingguan">Mingguan (Hari Tertentu)</option>
+                        <option value="Bulanan">Bulanan (Tanggal Tertentu)</option>
+                        <option value="3 Bulanan">3 Bulanan (Triwulan)</option>
+                        <option value="6 Bulanan">6 Bulanan (Semester)</option>
+                        <option value="Tahunan">Tahunan (1 Tahun)</option>
+                    </select>
+                </div>
+
+                <div id="editDayField" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Hari Pelaksanaan</label>
+                    <select id="editDay" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="Senin">Senin</option>
+                        <option value="Selasa">Selasa</option>
+                        <option value="Rabu">Rabu</option>
+                        <option value="Kamis">Kamis</option>
+                        <option value="Jumat">Jumat</option>
+                        <option value="Sabtu">Sabtu</option>
+                    </select>
+                </div>
+
+                <div id="editDateField" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Tanggal Eksekusi</label>
+                    <input type="date" id="editStartDate" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Jam Mulai (Opsional)</label>
+                        <input type="time" id="editStartTime" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Jam Selesai (Opsional)</label>
+                        <input type="time" id="editEndTime" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <div id="editAlertBox" class="hidden p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs"></div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-xs rounded-lg transition-colors">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg transition-colors">Simpan Perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let masterStudents = JSON.parse(localStorage.getItem('master_students_data')) || {
+            "Kelas 1": [{ name: "Ahmad Nur", phone: "08123456789" }, { name: "Budi Santoso", phone: "08987654321" }],
+            "Kelas 2": [{ name: "Siti Putri", phone: "" }],
+            "Kelas 3": [], "Kelas 4": [], "Kelas 5": [], "Kelas 6": []
+        };
+
+        let masterSubjects = JSON.parse(localStorage.getItem('master_subjects_data')) || [
+            "Piket Kebersihan Kelas", "Piket Perpustakaan", "Matematika", "Bahasa Indonesia"
+        ];
+
+        let masterRooms = JSON.parse(localStorage.getItem('master_rooms_data')) || [
+            "Laboratorium Komputer", "Perpustakaan", "Lapangan Utama", "Ruang Aula"
+        ];
+
+        let schedules = JSON.parse(localStorage.getItem('dynamic_schedules_pro_excel')) || [];
+
+        const form = document.getElementById('scheduleForm');
+        const alertBox = document.getElementById('alertBox');
+        const tableBody = document.getElementById('scheduleTableBody');
+        const totalCount = document.getElementById('totalCount');
+        const filterTitle = document.getElementById('filterTitle');
+
+        function saveMasterData() {
+            localStorage.setItem('master_students_data', JSON.stringify(masterStudents));
+            localStorage.setItem('master_subjects_data', JSON.stringify(masterSubjects));
+            localStorage.setItem('master_rooms_data', JSON.stringify(masterRooms));
+            updateStudentDropdown();
+            updateSubjectDropdown();
+            updateRoomDropdown();
+            renderMasterList();
+        }
+
+        /* --- FITUR EXPORT EXCEL (.XLSX) --- */
+        function downloadExcelTemplate() {
+            const wb = XLSX.utils.book_new();
+
+            // Sheet 1: Jadwal Piket & Pelajaran
+            const scheduleData = schedules.map((item, idx) => ({
+                "No": idx + 1,
+                "Kelas": item.className,
+                "Nama Siswa": item.childName,
+                "Mapel / Kegiatan": item.title,
+                "Ruangan": item.roomName === 'NONE' ? '' : item.roomName,
+                "Siklus": item.cycleType,
+                "Hari / Tanggal": item.day || item.startDate || 'Setiap Hari',
+                "Jam Mulai": item.startTime || '',
+                "Jam Selesai": item.endTime || ''
+            }));
+            const wsSchedules = XLSX.utils.json_to_sheet(scheduleData.length ? scheduleData : [
+                { "No": 1, "Kelas": "Kelas 1", "Nama Siswa": "Ahmad Nur", "Mapel / Kegiatan": "Piket Kebersihan Kelas", "Ruangan": "", "Siklus": "Harian", "Hari / Tanggal": "Setiap Hari", "Jam Mulai": "06:30", "Jam Selesai": "07:00" }
+            ]);
+            XLSX.utils.book_append_sheet(wb, wsSchedules, "Daftar Jadwal");
+
+            // Sheet 2: Master Siswa
+            const studentRows = [];
+            Object.keys(masterStudents).forEach(cls => {
+                (masterStudents[cls] || []).forEach(st => {
+                    studentRows.push({ "Kelas": cls, "Nama Siswa": st.name, "No WhatsApp": st.phone });
+                });
+            });
+            const wsStudents = XLSX.utils.json_to_sheet(studentRows);
+            XLSX.utils.book_append_sheet(wb, wsStudents, "Master Siswa");
+
+            XLSX.writeFile(wb, "Template_Jadwal_Piket_Sekolah.xlsx");
+        }
+
+        /* --- FITUR IMPORT EXCEL / CSV (.XLSX / .CSV) --- */
+        function handleExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    // Baca Sheet "Daftar Jadwal" atau Sheet Pertama
+                    const sheetName = workbook.SheetNames.includes("Daftar Jadwal") ? "Daftar Jadwal" : workbook.SheetNames[0];
+                    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+                    if (rows.length > 0) {
+                        schedules = rows.map((row, idx) => ({
+                            id: Date.now() + idx,
+                            className: row["Kelas"] || "Kelas 1",
+                            childName: row["Nama Siswa"] || "Siswa",
+                            title: row["Mapel / Kegiatan"] || "Kegiatan",
+                            roomName: row["Ruangan"] || "NONE",
+                            cycleType: row["Siklus"] || "Harian",
+                            day: row["Hari / Tanggal"] && ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"].includes(row["Hari / Tanggal"]) ? row["Hari / Tanggal"] : "",
+                            startDate: row["Hari / Tanggal"] && !["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"].includes(row["Hari / Tanggal"]) ? row["Hari / Tanggal"] : "",
+                            startTime: row["Jam Mulai"] || "",
+                            endTime: row["Jam Selesai"] || ""
+                        }));
+                    }
+
+                    // Baca Sheet "Master Siswa" jika ada
+                    if (workbook.SheetNames.includes("Master Siswa")) {
+                        const studentRows = XLSX.utils.sheet_to_json(workbook.Sheets["Master Siswa"]);
+                        studentRows.forEach(r => {
+                            if (r["Kelas"] && r["Nama Siswa"]) {
+                                if (!masterStudents[r["Kelas"]]) masterStudents[r["Kelas"]] = [];
+                                const exists = masterStudents[r["Kelas"]].some(s => s.name === r["Nama Siswa"]);
+                                if (!exists) {
+                                    masterStudents[r["Kelas"]].push({ name: r["Nama Siswa"], phone: r["No WhatsApp"] || "" });
+                                }
+                            }
+                        });
+                    }
+
+                    saveMasterData();
+                    updateFilterOptions();
+                    renderSchedules();
+                    alert("Berhasil mengimpor data dari file Excel!");
+                } catch (error) {
+                    alert("Gagal membaca file Excel/CSV. Pastikan format file sesuai.");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function addStudentToClass() {
+            const cls = document.getElementById('masterClassSelect').value;
+            const name = document.getElementById('newStudentName').value.trim();
+            const phone = document.getElementById('newStudentPhone').value.trim();
+            if (name) {
+                if (!masterStudents[cls]) masterStudents[cls] = [];
+                masterStudents[cls].push({ name, phone });
+                document.getElementById('newStudentName').value = '';
+                document.getElementById('newStudentPhone').value = '';
+                saveMasterData();
+            }
+        }
+
+        function addSubject() {
+            const subj = document.getElementById('newSubjectName').value.trim();
+            if (subj && !masterSubjects.includes(subj)) {
+                masterSubjects.push(subj);
+                document.getElementById('newSubjectName').value = '';
+                saveMasterData();
+            }
+        }
+
+        function addRoom() {
+            const room = document.getElementById('newRoomName').value.trim();
+            if (room && !masterRooms.includes(room)) {
+                masterRooms.push(room);
+                document.getElementById('newRoomName').value = '';
+                saveMasterData();
+            }
+        }
+
+        function renderMasterList() {
+            const cls = document.getElementById('masterClassSelect').value;
+            const listEl = document.getElementById('masterStudentList');
+            document.getElementById('masterListTitle').innerText = `Daftar Siswa & WA (${cls}):`;
+            listEl.innerHTML = '';
+            (masterStudents[cls] || []).forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = `${item.name} (${item.phone || 'Tanpa WA'})`;
+                listEl.appendChild(li);
+            });
+        }
+
+        function updateStudentDropdown() {
+            const cls = document.getElementById('formClassSelect').value;
+            const selectEl = document.getElementById('childName');
+            selectEl.innerHTML = '';
+            const students = masterStudents[cls] || [];
+            if (students.length === 0) {
+                selectEl.innerHTML = `<option value="">-- Belum ada siswa di ${cls} --</option>`;
+            } else {
+                students.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.name;
+                    opt.textContent = s.name;
+                    selectEl.appendChild(opt);
+                });
+            }
+        }
+
+        function updateSubjectDropdown() {
+            const selectEl = document.getElementById('title');
+            selectEl.innerHTML = '';
+            masterSubjects.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s;
+                opt.textContent = s;
+                selectEl.appendChild(opt);
+            });
+            updateFilterOptions();
+        }
+
+        function updateRoomDropdown() {
+            const selectEl = document.getElementById('roomName');
+            selectEl.innerHTML = `<option value="NONE">-- Opsional / Tanpa Ruangan --</option>`;
+            masterRooms.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r;
+                opt.textContent = r;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        function toggleFormFields() {
+            const cycle = document.getElementById('cycleType').value;
+            const dayField = document.getElementById('dayField');
+            const dateField = document.getElementById('dateField');
+
+            if (cycle === 'Mingguan') {
+                dayField.classList.remove('hidden');
+                dateField.classList.add('hidden');
+            } else if (cycle === 'Harian') {
+                dayField.classList.add('hidden');
+                dateField.classList.add('hidden');
+            } else {
+                dayField.classList.add('hidden');
+                dateField.classList.remove('hidden');
+            }
+        }
+
+        function timeToMinutes(timeStr) {
+            if (!timeStr) return null;
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+
+        function checkConflict(newEntry, excludeId = null) {
+            const startMin = timeToMinutes(newEntry.startTime);
+            const endMin = timeToMinutes(newEntry.endTime);
+
+            if (startMin !== null && endMin !== null && startMin >= endMin) {
+                return "Jam selesai harus lebih besar dari jam mulai.";
+            }
+
+            for (let item of schedules) {
+                if (item.id === excludeId) continue;
+
+                const sameDay = (newEntry.cycleType === 'Mingguan' && item.cycleType === 'Mingguan' && newEntry.day === item.day);
+                const sameDate = (newEntry.startDate && item.startDate && newEntry.startDate === item.startDate);
+                const isDaily = (newEntry.cycleType === 'Harian' || item.cycleType === 'Harian');
+
+                if (sameDay || sameDate || isDaily) {
+                    const itemStart = timeToMinutes(item.startTime);
+                    const itemEnd = timeToMinutes(item.endTime);
+
+                    let isTimeOverlap = true;
+                    if (startMin !== null && endMin !== null && itemStart !== null && itemEnd !== null) {
+                        isTimeOverlap = (startMin < itemEnd && endMin > itemStart);
+                    }
+
+                    if (isTimeOverlap) {
+                        if (item.childName.toLowerCase() === newEntry.childName.toLowerCase()) {
+                            return `Siswa "${newEntry.childName}" sudah ada jadwal kegiatan "${item.title}" di waktu yang sama.`;
+                        }
+                        if (newEntry.roomName !== "NONE" && item.roomName === newEntry.roomName) {
+                            return `Ruangan "${newEntry.roomName}" sedang digunakan untuk kegiatan "${item.title}" oleh ${item.childName}.`;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        function sendWhatsAppReminder(id) {
+            const item = schedules.find(s => s.id === id);
+            if (!item) return;
+
+            let phone = "";
+            const clsStudents = masterStudents[item.className] || [];
+            const foundStudent = clsStudents.find(s => s.name === item.childName);
+            if (foundStudent) phone = foundStudent.phone;
+
+            if (!phone) {
+                phone = prompt(`Masukkan Nomor WhatsApp untuk ${item.childName} (Contoh: 08123456789):`);
+                if (!phone) return;
+            }
+
+            phone = phone.replace(/[^0-9]/g, '');
+            if (phone.startsWith('0')) phone = '62' + phone.slice(1);
+
+            let timeDetail = item.cycleType === 'Harian' ? 'Setiap Hari' : (item.cycleType === 'Mingguan' ? `Hari ${item.day}` : `Tanggal: ${item.startDate}`);
+            let timeClock = (item.startTime && item.endTime) ? `\n⏰ Jam: ${item.startTime} - ${item.endTime} WIB` : '';
+            let roomDetail = item.roomName !== 'NONE' ? `\n📍 Lokasi: ${item.roomName}` : '';
+
+            const message = `Halo *${item.childName}* (${item.className}),\n\n` +
+                            `Pengingat Jadwal Piket / Kegiatan:\n` +
+                            `📌 *${item.title}*\n` +
+                            `📅 Waktu: ${timeDetail}` +
+                            `${timeClock}` +
+                            `${roomDetail}\n\n` +
+                            `Mohon untuk melaksanakan tugas tepat waktu. Terima kasih!`;
+
+            const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+            window.open(waUrl, '_blank');
+        }
+
+        function updateFilterOptions() {
+            const currentSelected = filterTitle.value;
+            const uniqueTitles = [...new Set(schedules.map(item => item.title))];
+
+            filterTitle.innerHTML = `<option value="ALL">-- Tampilkan Semua Kegiatan --</option>`;
+            uniqueTitles.forEach(title => {
+                const opt = document.createElement('option');
+                opt.value = title;
+                opt.textContent = title;
+                filterTitle.appendChild(opt);
+            });
+
+            filterTitle.value = uniqueTitles.includes(currentSelected) ? currentSelected : "ALL";
+        }
+
+        function renderSchedules() {
+            tableBody.innerHTML = '';
+            const selectedFilter = filterTitle.value;
+
+            let filteredSchedules = schedules;
+            if (selectedFilter !== "ALL") {
+                filteredSchedules = schedules.filter(item => item.title === selectedFilter);
+            }
+
+            if (filteredSchedules.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400">Belum ada data jadwal tersimpan.</td></tr>`;
+            }
+
+            filteredSchedules.forEach(item => {
+                let detailInfo = item.cycleType === 'Harian' ? 'Setiap Hari' : (item.cycleType === 'Mingguan' ? `Hari ${item.day}` : `Tgl: ${item.startDate || '-'}`);
+                let timeDisplay = (item.startTime && item.endTime) ? `${item.startTime} - ${item.endTime} WIB` : '<span class="italic text-slate-400">Sepanjang Hari (Bebas)</span>';
+                let roomDisplay = item.roomName !== 'NONE' ? `<span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-xs font-semibold">${item.roomName}</span>` : `<span class="text-slate-400 text-xs italic">- Tanpa Ruangan -</span>`;
+
+                const row = document.createElement('tr');
+                row.className = "hover:bg-slate-50 transition-colors";
+                row.innerHTML = `
+                    <td class="py-3 px-4">
+                        <div class="font-bold text-indigo-600">${item.childName}</div>
+                        <div class="text-xs text-slate-500">${item.className}</div>
+                    </td>
+                    <td class="py-3 px-4 font-semibold text-slate-900">${item.title}</td>
+                    <td class="py-3 px-4">${roomDisplay}</td>
+                    <td class="py-3 px-4 text-slate-700">
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100">${item.cycleType}</span>
+                        <div class="text-xs text-slate-500 mt-0.5">${detailInfo} (${timeDisplay})</div>
+                    </td>
+                    <td class="py-3 px-4 text-center no-print">
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="openEditModal(${item.id})" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium px-2 py-1 bg-indigo-50 rounded">Edit</button>
+                            <button onclick="sendWhatsAppReminder(${item.id})" class="text-emerald-600 hover:text-emerald-800 text-xs font-medium px-2 py-1 bg-emerald-50 rounded">💬 WA</button>
+                            <button onclick="deleteSchedule(${item.id})" class="text-red-500 hover:text-red-700 text-xs font-medium px-2 py-1 bg-red-50 rounded">Hapus</button>
+                        </div>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            totalCount.innerText = `${filteredSchedules.length} Jadwal`;
+            localStorage.setItem('dynamic_schedules_pro_excel', JSON.stringify(schedules));
+        }
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const className = document.getElementById('formClassSelect').value;
+            const childName = document.getElementById('childName').value;
+            const title = document.getElementById('title').value;
+            const roomName = document.getElementById('roomName').value;
+            const cycleType = document.getElementById('cycleType').value;
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+
+            if (!childName) {
+                alert("Pilih siswa terlebih dahulu!");
+                return;
+            }
+
+            let newEntry = {
+                id: Date.now(),
+                className,
+                childName,
+                title,
+                roomName,
+                cycleType,
+                startTime,
+                endTime
+            };
+
+            if (cycleType === 'Mingguan') newEntry.day = document.getElementById('day').value;
+            else if (cycleType !== 'Harian') newEntry.startDate = document.getElementById('startDate').value;
+
+            const conflictError = checkConflict(newEntry);
+            if (conflictError) {
+                alertBox.innerText = `Peringatan Bentrok: ${conflictError}`;
+                alertBox.classList.remove('hidden');
+                return;
+            }
+
+            alertBox.classList.add('hidden');
+            schedules.push(newEntry);
+            updateFilterOptions();
+            renderSchedules();
+            form.reset();
+            updateStudentDropdown();
+            updateSubjectDropdown();
+            updateRoomDropdown();
+            toggleFormFields();
+        });
+
+        /* --- MODAL EDIT LOGIC --- */
+        function openEditModal(id) {
+            const item = schedules.find(s => s.id === id);
+            if (!item) return;
+
+            document.getElementById('editId').value = item.id;
+            document.getElementById('editClassSelect').value = item.className;
+            
+            updateEditStudentDropdown();
+            document.getElementById('editChildName').value = item.childName;
+
+            updateEditSubjectDropdown();
+            document.getElementById('editTitle').value = item.title;
+
+            updateEditRoomDropdown();
+            document.getElementById('editRoomName').value = item.roomName;
+
+            document.getElementById('editCycleType').value = item.cycleType;
+            toggleEditFormFields();
+
+            if (item.cycleType === 'Mingguan') {
+                document.getElementById('editDay').value = item.day || 'Senin';
+            } else if (item.cycleType !== 'Harian') {
+                document.getElementById('editStartDate').value = item.startDate || '';
+            }
+
+            document.getElementById('editStartTime').value = item.startTime || '';
+            document.getElementById('editEndTime').value = item.endTime || '';
+            document.getElementById('editAlertBox').classList.add('hidden');
+
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+        }
+
+        function updateEditStudentDropdown() {
+            const cls = document.getElementById('editClassSelect').value;
+            const selectEl = document.getElementById('editChildName');
+            selectEl.innerHTML = '';
+            (masterStudents[cls] || []).forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.name;
+                opt.textContent = s.name;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        function updateEditSubjectDropdown() {
+            const selectEl = document.getElementById('editTitle');
+            selectEl.innerHTML = '';
+            masterSubjects.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s;
+                opt.textContent = s;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        function updateEditRoomDropdown() {
+            const selectEl = document.getElementById('editRoomName');
+            selectEl.innerHTML = `<option value="NONE">-- Opsional / Tanpa Ruangan --</option>`;
+            masterRooms.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r;
+                opt.textContent = r;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        function toggleEditFormFields() {
+            const cycle = document.getElementById('editCycleType').value;
+            const dayField = document.getElementById('editDayField');
+            const dateField = document.getElementById('editDateField');
+
+            if (cycle === 'Mingguan') {
+                dayField.classList.remove('hidden');
+                dateField.classList.add('hidden');
+            } else if (cycle === 'Harian') {
+                dayField.classList.add('hidden');
+                dateField.classList.add('hidden');
+            } else {
+                dayField.classList.add('hidden');
+                dateField.classList.remove('hidden');
+            }
+        }
+
+        document.getElementById('editForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = Number(document.getElementById('editId').value);
+            const className = document.getElementById('editClassSelect').value;
+            const childName = document.getElementById('editChildName').value;
+            const title = document.getElementById('editTitle').value;
+            const roomName = document.getElementById('editRoomName').value;
+            const cycleType = document.getElementById('editCycleType').value;
+            const startTime = document.getElementById('editStartTime').value;
+            const endTime = document.getElementById('editEndTime').value;
+
+            let updatedEntry = {
+                id,
+                className,
+                childName,
+                title,
+                roomName,
+                cycleType,
+                startTime,
+                endTime
+            };
+
+            if (cycleType === 'Mingguan') updatedEntry.day = document.getElementById('editDay').value;
+            else if (cycleType !== 'Harian') updatedEntry.startDate = document.getElementById('editStartDate').value;
+
+            const conflictError = checkConflict(updatedEntry, id);
+            if (conflictError) {
+                const alertEl = document.getElementById('editAlertBox');
+                alertEl.innerText = `Peringatan Bentrok: ${conflictError}`;
+                alertEl.classList.remove('hidden');
+                return;
+            }
+
+            const index = schedules.findIndex(s => s.id === id);
+            if (index !== -1) {
+                schedules[index] = updatedEntry;
+            }
+
+            closeEditModal();
+            updateFilterOptions();
+            renderSchedules();
+        });
+
+        function deleteSchedule(id) {
+            schedules = schedules.filter(item => item.id !== id);
+            updateFilterOptions();
+            renderSchedules();
+            alertBox.classList.add('hidden');
+        }
+
+        // Inisialisasi awal
+        toggleFormFields();
+        saveMasterData();
+        renderSchedules();
+    </script>
+</body>
+</html>
