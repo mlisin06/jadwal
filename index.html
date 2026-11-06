@@ -23,15 +23,13 @@
     <!-- FullCalendar.io (Kalender Visual Engine) -->
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
 
-    <!-- CSS Cetak Khusus Multi-Halaman -->
+    <!-- CSS Cetak Khusus Multi-Halaman & Fix Scroll Kalender -->
     <style>
         @media print {
-            /* Sembunyikan elemen non-cetak */
             .no-print { 
                 display: none !important; 
             }
             
-            /* Lepaskan batasan scroll pada body dan container */
             html, body {
                 background: #ffffff !important;
                 color: #000000 !important;
@@ -57,9 +55,26 @@
                 overflow: visible !important;
             }
 
-            #tableViewContainer {
+            #tableViewContainer, #calendarViewContainer {
                 overflow: visible !important;
                 height: auto !important;
+                max-height: none !important;
+            }
+
+            /* Fix Scroll & Ketinggian Kalender Visual Saat Cetak */
+            .fc, .fc-view-harness, .fc-scroller, .fc-scroller-liquid-absolute {
+                height: auto !important;
+                max-height: none !important;
+                position: relative !important;
+                overflow: visible !important;
+            }
+
+            .fc-toolbar {
+                display: none !important; /* Sembunyikan tombol navigasi kalender saat dicetak */
+            }
+
+            .fc-list-table {
+                width: 100% !important;
             }
 
             /* Pengaturan Tabel Cetak */
@@ -69,13 +84,13 @@
                 page-break-inside: auto !important;
             }
 
-            tr {
+            tr, .fc-list-event {
                 page-break-inside: avoid !important;
                 page-break-after: auto !important;
             }
 
             thead {
-                display: table-header-group !important; /* Header tabel diulang di tiap halaman cetak */
+                display: table-header-group !important;
             }
 
             th, td {
@@ -248,8 +263,9 @@
 
         <!-- Mode Tampilan: Tabel vs Kalender Visual -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 print-container">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 no-print">
-                <div class="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+            <!-- Filter & Tombol Cetak -->
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 no-print">
+                <div class="flex items-center gap-2 bg-slate-100 p-1 rounded-xl w-fit">
                     <button id="btnViewTable" onclick="switchViewMode('table')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-colors bg-white text-indigo-700 shadow-sm">
                         📋 Tampilan Tabel
                     </button>
@@ -258,23 +274,28 @@
                     </button>
                 </div>
 
-                <div class="flex items-center gap-3">
-                    <div id="tableFilterBox" class="flex items-center gap-2">
-                        <select id="filterTitle" onchange="renderSchedules()" class="px-3 py-2 border rounded-lg text-xs outline-none bg-slate-50">
-                            <option value="ALL">-- Semua Kegiatan --</option>
-                        </select>
-                    </div>
+                <!-- Opsi Filter Per Kegiatan & Per Siswa -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <select id="filterTitle" onchange="onFilterChange()" class="px-3 py-1.5 border rounded-lg text-xs outline-none bg-slate-50 font-medium">
+                        <option value="ALL">-- Semua Kegiatan --</option>
+                    </select>
+
+                    <select id="filterStudent" onchange="onFilterChange()" class="px-3 py-1.5 border rounded-lg text-xs outline-none bg-slate-50 font-medium">
+                        <option value="ALL">-- Semua Siswa --</option>
+                    </select>
+
                     <span id="totalCount" class="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2.5 py-1 rounded-full">0 Jadwal</span>
-                    <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-1">
-                        🖨️ Cetak Laporan Full
+                    
+                    <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-1.5 rounded-lg transition-colors flex items-center gap-1 shadow-sm">
+                        🖨️ Cetak Laporan
                     </button>
                 </div>
             </div>
 
-            <!-- Header Khusus Mode Cetak Kop Surat -->
+            <!-- Header Kop Surat Resmi Cetak -->
             <div class="hidden print:block text-center border-b-2 border-slate-900 pb-4 mb-6">
-                <h2 class="text-xl font-bold uppercase tracking-wide text-black">JADWAL PELAJARAN & ROTASI PIKET SEKOLAH</h2>
-                <p class="text-xs text-slate-600 mt-1">Laporan Resmi Sistem Penjadwalan Terpadu</p>
+                <h2 class="text-xl font-bold uppercase tracking-wide text-black">LAPORAN PENJADWALAN & ROTASI PIKET SEKOLAH</h2>
+                <p class="text-xs text-slate-600 mt-1" id="printSubTitle">Rekap Data Terpadu Sistem Penjadwalan</p>
             </div>
 
             <!-- Tampilan 1: Tabel Data Utama -->
@@ -297,7 +318,7 @@
 
             <!-- Tampilan 2: Kalender Visual FullCalendar -->
             <div id="calendarViewContainer" class="hidden">
-                <div id="calendar" class="min-h-[500px]"></div>
+                <div id="calendar"></div>
             </div>
         </div>
     </div>
@@ -482,6 +503,7 @@
         const tableBody = document.getElementById('scheduleTableBody');
         const totalCount = document.getElementById('totalCount');
         const filterTitle = document.getElementById('filterTitle');
+        const filterStudent = document.getElementById('filterStudent');
 
         function openFirebaseModal() {
             const currentConfig = localStorage.getItem('firebase_school_config') || '';
@@ -815,9 +837,13 @@
             window.open(waUrl, '_blank');
         }
 
+        // Memperbarui opsi filter Kegiatan & Siswa
         window.updateFilterOptions = function() {
-            const currentSelected = filterTitle.value;
+            const currentSelectedTitle = filterTitle.value;
+            const currentSelectedStudent = filterStudent.value;
+
             const uniqueTitles = [...new Set(window.schedules.map(item => item.title))];
+            const uniqueStudents = [...new Set(window.schedules.map(item => item.childName))];
 
             filterTitle.innerHTML = `<option value="ALL">-- Semua Kegiatan --</option>`;
             uniqueTitles.forEach(title => {
@@ -826,21 +852,53 @@
                 opt.textContent = title;
                 filterTitle.appendChild(opt);
             });
+            filterTitle.value = uniqueTitles.includes(currentSelectedTitle) ? currentSelectedTitle : "ALL";
 
-            filterTitle.value = uniqueTitles.includes(currentSelected) ? currentSelected : "ALL";
+            filterStudent.innerHTML = `<option value="ALL">-- Semua Siswa --</option>`;
+            uniqueStudents.forEach(st => {
+                const opt = document.createElement('option');
+                opt.value = st;
+                opt.textContent = st;
+                filterStudent.appendChild(opt);
+            });
+            filterStudent.value = uniqueStudents.includes(currentSelectedStudent) ? currentSelectedStudent : "ALL";
+        };
+
+        // Fungsi Filter Gabungan
+        function getFilteredData() {
+            const selectedTitle = filterTitle.value;
+            const selectedStudent = filterStudent.value;
+
+            return window.schedules.filter(item => {
+                const matchTitle = (selectedTitle === "ALL" || item.title === selectedTitle);
+                const matchStudent = (selectedStudent === "ALL" || item.childName === selectedStudent);
+                return matchTitle && matchStudent;
+            });
+        }
+
+        window.onFilterChange = function() {
+            renderSchedules();
+            if (window.calendarObj) window.renderCalendarEvents();
         };
 
         window.renderSchedules = function() {
             tableBody.innerHTML = '';
-            const selectedFilter = filterTitle.value;
+            const filteredSchedules = getFilteredData();
 
-            let filteredSchedules = window.schedules;
-            if (selectedFilter !== "ALL") {
-                filteredSchedules = window.schedules.filter(item => item.title === selectedFilter);
+            // Keterangan Judul Cetak Dinamis
+            const printSub = document.getElementById('printSubTitle');
+            let infoText = "Rekap Data Terpadu Sistem Penjadwalan";
+            if (filterTitle.value !== "ALL" && filterStudent.value !== "ALL") {
+                infoText = `Kegiatan: ${filterTitle.value} | Siswa: ${filterStudent.value}`;
+            } else if (filterTitle.value !== "ALL") {
+                infoText = `Rekap Khusus Kegiatan: ${filterTitle.value}`;
+            } else if (filterStudent.value !== "ALL") {
+                infoText = `Rekap Khusus Siswa: ${filterStudent.value}`;
             }
+            if (printSub) printSub.innerText = infoText;
 
             if (filteredSchedules.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400">Belum ada data jadwal tersimpan.</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400">Belum ada data jadwal yang sesuai filter.</td></tr>`;
             }
 
             filteredSchedules.forEach(item => {
@@ -959,6 +1017,7 @@
             window.calendarObj = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'listMonth',
                 locale: 'id',
+                height: 'auto', // Memastikan tinggi kalender fleksibel untuk cetak
                 headerToolbar: {
                     left: 'prev,next today',
                     center: 'title',
@@ -969,7 +1028,7 @@
                     listMonth: 'Agenda Bulan Ini',
                     listWeek: 'Agenda Minggu Ini'
                 },
-                noEventsContent: 'Tidak ada jadwal kegiatan untuk ditampilkan.',
+                noEventsContent: 'Tidak ada jadwal kegiatan yang sesuai filter.',
                 events: getCalendarEvents()
             });
             window.calendarObj.render();
@@ -983,7 +1042,8 @@
         };
 
         function getCalendarEvents() {
-            return window.schedules.map(item => {
+            const filteredData = getFilteredData();
+            return filteredData.map(item => {
                 let color = "#4f46e5";
                 if (item.title.toLowerCase().includes('piket')) color = "#059669";
                 else if (item.cycleType === 'Tahunan') color = "#e11d48";
@@ -1113,7 +1173,7 @@
                     const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
                     await deleteDoc(doc(window.db, "schedules", String(id)));
                 } else {
-                    window.schedules = window.schedules.filter(item => item.id !== item);
+                    window.schedules = window.schedules.filter(item => item.id !== id);
                     syncScheduleData();
                 }
             }
